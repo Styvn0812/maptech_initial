@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { MessageCircle, Send, Edit2, Trash2, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Send, Edit2, Trash2, Clock } from 'lucide-react';
 
 interface Question {
   id: number;
@@ -62,6 +62,7 @@ const initialQuestions: Question[] = [
 
 export function QADiscussion() {
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
+  const bcRef = useRef<BroadcastChannel | null>(null);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
   const [filter, setFilter] = useState<'all' | 'unanswered' | 'answered'>('all');
@@ -72,35 +73,84 @@ export function QADiscussion() {
   });
   const handleReply = (id: number) => {
     if (!replyText.trim()) return;
-    setQuestions(
-      questions.map((q) =>
-        q.id === id
-          ? {
-              ...q,
-              answer: replyText,
-              answeredAt: 'Just now'
-            }
-          : q
-      )
+    const newQs = questions.map((q) =>
+      q.id === id
+        ? {
+            ...q,
+            answer: replyText,
+            answeredAt: 'Just now'
+          }
+        : q
     );
+    setQuestions(newQs);
+    try {
+      localStorage.setItem('qa-questions', JSON.stringify(newQs));
+      bcRef.current?.postMessage('qa-updated');
+      localStorage.setItem('qa-updated', Date.now().toString());
+    } catch (e) {}
     setReplyText('');
     setReplyingTo(null);
   };
   const handleDeleteAnswer = (id: number) => {
     if (window.confirm('Delete your answer?')) {
-      setQuestions(
-        questions.map((q) =>
-          q.id === id
-            ? {
-                ...q,
-                answer: null,
-                answeredAt: null
-              }
-            : q
-        )
+      const newQs = questions.map((q) =>
+        q.id === id
+          ? {
+              ...q,
+              answer: null,
+              answeredAt: null
+            }
+          : q
       );
+      setQuestions(newQs);
+      try {
+        localStorage.setItem('qa-questions', JSON.stringify(newQs));
+        bcRef.current?.postMessage('qa-updated');
+        localStorage.setItem('qa-updated', Date.now().toString());
+      } catch (e) {}
     }
   };
+
+  const refreshData = () => {
+    try {
+      const raw = localStorage.getItem('qa-questions');
+      if (raw) {
+        const parsed = JSON.parse(raw) as Question[];
+        setQuestions(parsed);
+        return;
+      }
+    } catch (e) {}
+    // fallback: keep current questions (or reset to initial)
+    setQuestions((s) => s);
+  };
+
+  useEffect(() => {
+    // initialize from storage if another tab/app wrote data
+    try {
+      const raw = localStorage.getItem('qa-questions');
+      if (raw) setQuestions(JSON.parse(raw));
+    } catch (e) {}
+
+    // BroadcastChannel for same-origin tabs
+    try {
+      const bc = new BroadcastChannel('qa-channel');
+      bc.onmessage = () => refreshData();
+      bcRef.current = bc;
+    } catch (e) {
+      bcRef.current = null;
+    }
+
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === 'qa-updated') refreshData();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      try {
+        bcRef.current?.close();
+      } catch (e) {}
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -123,6 +173,12 @@ export function QADiscussion() {
               )}
             </button>
           ))}
+          <button
+            onClick={refreshData}
+            className="px-3 py-1.5 text-sm font-medium rounded-md bg-white text-slate-600 border border-slate-300 hover:bg-slate-50"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 

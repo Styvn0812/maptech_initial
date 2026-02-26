@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoginPage } from './pages/LoginPage';
 import { QADiscussion as InstructorQADiscussion } from './pages/instructor/QADiscussion';
 import { QADiscussion as AdminQADiscussion } from './pages/admin/QADiscussion';
@@ -57,7 +57,7 @@ export function App() {
   // =========================
   const handleLogout = async () => {
     try {
-      await fetch('/logout', {
+      await fetch('http://127.0.0.1:8000/logout', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -71,6 +71,37 @@ export function App() {
     setUser(null);
     setCurrentPage('dashboard');
   };
+
+  // Rehydrate session on mount: request CSRF cookie then fetch /user
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await fetch('http://127.0.0.1:8000/sanctum/csrf-cookie', {
+          credentials: 'include',
+        });
+
+        const res = await fetch('http://127.0.0.1:8000/user', {
+          credentials: 'include',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.role && data.name && data.email) {
+            setUser({ role: data.role, name: data.name, email: data.email });
+            setCurrentPage('dashboard');
+          }
+        }
+      } catch (e) {
+        // no-op: unauthenticated or network error
+      }
+    };
+
+    init();
+  }, []);
 
   const handleNavigate = (page: string) => {
     setCurrentPage(page);

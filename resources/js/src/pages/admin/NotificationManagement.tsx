@@ -35,7 +35,7 @@ const initialNotifications: Notification[] = [
 }];
 
 export function NotificationManagement() {
-  const [notifications, setNotifications] =
+  const [notifications] =
   useState<Notification[]>(initialNotifications);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const handleSend = (e: React.FormEvent) => {
