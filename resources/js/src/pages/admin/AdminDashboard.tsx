@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Users,
   BookOpen,
@@ -8,17 +7,7 @@ import {
   Bell,
   UserPlus } from
 'lucide-react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Legend } from
+import * as recharts from
 'recharts';
 const completionData = [
 {
@@ -209,31 +198,31 @@ export function AdminDashboard() {
             Course Completion Trends
           </h3>
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={completionData}>
+            <recharts.ResponsiveContainer width="100%" height="100%">
+              <recharts.AreaChart data={completionData}>
                 <defs>
                   <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8} />
                     <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid
+                <recharts.CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
                   stroke="#e2e8f0" />
 
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Area
+                <recharts.XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <recharts.YAxis axisLine={false} tickLine={false} />
+                <recharts.Tooltip />
+                <recharts.Area
                   type="monotone"
                   dataKey="rate"
                   stroke="#22c55e"
                   fillOpacity={1}
                   fill="url(#colorRate)" />
 
-              </AreaChart>
-            </ResponsiveContainer>
+              </recharts.AreaChart>
+            </recharts.ResponsiveContainer>
           </div>
         </div>
 
@@ -242,31 +231,31 @@ export function AdminDashboard() {
             Department Performance
           </h3>
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={departmentData}>
-                <CartesianGrid
+            <recharts.ResponsiveContainer width="100%" height="100%">
+              <recharts.BarChart data={departmentData}>
+                <recharts.CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
                   stroke="#e2e8f0" />
 
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Legend />
-                <Bar
+                <recharts.XAxis dataKey="name" axisLine={false} tickLine={false} />
+                <recharts.YAxis axisLine={false} tickLine={false} />
+                <recharts.Tooltip />
+                <recharts.Legend />
+                <recharts.Bar
                   dataKey="completed"
                   fill="#22c55e"
                   name="Completed"
                   radius={[4, 4, 0, 0]} />
 
-                <Bar
+                <recharts.Bar
                   dataKey="assigned"
                   fill="#e2e8f0"
                   name="Assigned"
                   radius={[4, 4, 0, 0]} />
 
-              </BarChart>
-            </ResponsiveContainer>
+              </recharts.BarChart>
+            </recharts.ResponsiveContainer>
           </div>
         </div>
       </div>
