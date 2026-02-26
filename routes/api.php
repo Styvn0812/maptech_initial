@@ -82,6 +82,22 @@ Route::post('/departments/{id}/subdepartments', function (Request $request, $id)
     ]);
 });
 
+// UPDATE SUBDEPARTMENT
+Route::put('/subdepartments/{id}', function (Request $request, $id) {
+
+    $subdepartment = Subdepartment::findOrFail($id);
+
+    $request->validate([
+        'name' => 'required|string|max:255'
+    ]);
+
+    $subdepartment->update([
+        'name' => $request->name,
+    ]);
+
+    return $subdepartment;
+});
+
 // DELETE SUBDEPARTMENT
 Route::delete('/subdepartments/{id}', function ($id) {
 
