@@ -1,157 +1,259 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Plus,
   Edit2,
   Trash2,
-  Eye,
   Filter,
-  MoreVertical,
-  X } from
-'lucide-react';
-interface Employee {
+  X,
+  AlertCircle,
+  Loader2
+} from 'lucide-react';
+
+interface User {
   id: number;
   name: string;
+  fullName?: string;
   email: string;
+  department: string | null;
+  role: 'Admin' | 'Instructor' | 'Employee';
+  status: 'Active' | 'Inactive';
+  created_at?: string;
+}
+
+interface FormData {
+  fullName: string;
+  email: string;
+  password: string;
   department: string;
   role: 'Admin' | 'Instructor' | 'Employee';
   status: 'Active' | 'Inactive';
-  coursesEnrolled: number;
 }
-const initialEmployees: Employee[] = [
-{
-  id: 1,
-  name: 'Juan Dela Cruz',
-  email: 'juan.delacruz@maptech.com',
-  department: 'IT',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 4
-},
-{
-  id: 2,
-  name: 'Maria Santos',
-  email: 'maria.santos@maptech.com',
-  department: 'HR',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 2
-},
-{
-  id: 3,
-  name: 'Prof. Ana Reyes',
-  email: 'ana.reyes@maptech.com',
-  department: 'IT',
-  role: 'Instructor',
-  status: 'Active',
-  coursesEnrolled: 0
-},
-{
-  id: 4,
-  name: 'Jose Rizal',
-  email: 'jose.rizal@maptech.com',
-  department: 'Operations',
-  role: 'Admin',
-  status: 'Active',
-  coursesEnrolled: 0
-},
-{
-  id: 5,
-  name: 'Elena Reyes',
-  email: 'elena.reyes@maptech.com',
-  department: 'Finance',
-  role: 'Employee',
-  status: 'Inactive',
-  coursesEnrolled: 1
-},
-{
-  id: 6,
-  name: 'Antonio Luna',
-  email: 'antonio.luna@maptech.com',
-  department: 'Marketing',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 3
-},
-{
-  id: 7,
-  name: 'Gabriela Silang',
-  email: 'gabriela.silang@maptech.com',
-  department: 'IT',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 5
-},
-{
-  id: 8,
-  name: 'Andres Bonifacio',
-  email: 'andres.bonifacio@maptech.com',
-  department: 'Operations',
-  role: 'Instructor',
-  status: 'Active',
-  coursesEnrolled: 0
-},
-{
-  id: 9,
-  name: 'Teresa Magbanua',
-  email: 'teresa.magbanua@maptech.com',
-  department: 'HR',
-  role: 'Employee',
-  status: 'Inactive',
-  coursesEnrolled: 0
-}];
+
+const API_BASE = 'http://127.0.0.1:8000/api';
 
 export function UserManagement() {
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  // Filter Logic
-  const filteredEmployees = employees.filter((emp) => {
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Form refs
+  const fullNameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const departmentRef = useRef<HTMLSelectElement>(null);
+  const roleRef = useRef<HTMLSelectElement>(null);
+  const statusRef = useRef<HTMLInputElement>(null);
+
+  // Load users on mount
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_BASE}/admin/users`, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('Access denied. Admin privileges required.');
+        }
+        throw new Error('Failed to load users');
+      }
+
+      const data = await response.json();
+      setUsers(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter users
+  const filteredUsers = users.filter((user) => {
+    const name = user.fullName || user.name || '';
     const matchesSearch =
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.email.toLowerCase().includes(searchTerm.toLowerCase());
+      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept =
-    departmentFilter === 'All' || emp.department === departmentFilter;
+      departmentFilter === 'All' || user.department === departmentFilter;
     return matchesSearch && matchesDept;
   });
-  // Delete Handler
-  const handleDelete = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      setEmployees(employees.filter((emp) => emp.id !== id));
+
+  // Delete handler
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this user?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/admin/users/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete user');
+      }
+
+      setUsers(users.filter((user) => user.id !== id));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete user');
     }
   };
-  // Modal Handlers
-  const handleOpenModal = (employee?: Employee) => {
-    if (employee) {
-      setEditingEmployee(employee);
-    } else {
-      setEditingEmployee(null);
-    }
+
+  // Modal handlers
+  const handleOpenModal = (user?: User) => {
+    setEditingUser(user || null);
+    setFormError(null);
     setIsModalOpen(true);
   };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setEditingEmployee(null);
+    setEditingUser(null);
+    setFormError(null);
   };
-  // Form Submit Handler (Mock)
-  const handleSubmit = (e: React.FormEvent) => {
+
+  // Form submit handler
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, we'd gather form data here
-    handleCloseModal();
-    alert('User saved successfully!');
+    setFormError(null);
+    setSubmitting(true);
+
+    const formData: FormData = {
+      fullName: fullNameRef.current?.value || '',
+      email: emailRef.current?.value || '',
+      password: passwordRef.current?.value || '',
+      department: departmentRef.current?.value || '',
+      role: (roleRef.current?.value || 'Employee') as 'Admin' | 'Instructor' | 'Employee',
+      status: statusRef.current?.checked ? 'Active' : 'Inactive',
+    };
+
+    // Validation
+    if (!formData.fullName.trim()) {
+      setFormError('Full name is required');
+      setSubmitting(false);
+      return;
+    }
+    if (!formData.email.trim()) {
+      setFormError('Email is required');
+      setSubmitting(false);
+      return;
+    }
+    if (!editingUser && !formData.password) {
+      setFormError('Password is required for new users');
+      setSubmitting(false);
+      return;
+    }
+    if (formData.role === 'Employee' && !formData.department) {
+      setFormError('Department is required for Employee role');
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      const url = editingUser
+        ? `${API_BASE}/admin/users/${editingUser.id}`
+        : `${API_BASE}/admin/users`;
+
+      const method = editingUser ? 'PUT' : 'POST';
+
+      const body: any = {
+        fullName: formData.fullName,
+        email: formData.email,
+        role: formData.role,
+        department: formData.role === 'Employee' ? formData.department : null,
+        status: formData.status,
+      };
+
+      // Only include password if provided (for edit) or required (for create)
+      if (formData.password) {
+        body.password = formData.password;
+      }
+
+      const response = await fetch(url, {
+        method,
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to save user');
+      }
+
+      // Reload users
+      await loadUsers();
+      handleCloseModal();
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to save user');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+        <span className="ml-2 text-slate-600">Loading users...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
+          <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+          <span className="text-red-700">{error}</span>
+          <button
+            onClick={loadUsers}
+            className="ml-auto text-red-600 hover:text-red-800 underline"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
         <button
           onClick={() => handleOpenModal()}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+        >
           <Plus className="h-4 w-4 mr-2" />
-          Add Employee
+          Add User
         </button>
       </div>
 
@@ -166,8 +268,8 @@ export function UserManagement() {
             className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-green-500 focus:border-green-500 sm:text-sm"
             placeholder="Search by name or email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)} />
-
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
         <div className="sm:w-48">
           <div className="relative">
@@ -177,8 +279,8 @@ export function UserManagement() {
             <select
               className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500 sm:text-sm"
               value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}>
-
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+            >
               <option value="All">All Departments</option>
               <option value="IT">IT</option>
               <option value="HR">HR</option>
@@ -196,103 +298,95 @@ export function UserManagement() {
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Name
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Department
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Role
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th
-                  scope="col"
-                  className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-
-                  Enrolled
-                </th>
-                <th scope="col" className="relative px-6 py-3">
+                <th className="relative px-6 py-3">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
-              {filteredEmployees.map((employee) =>
-              <tr
-                key={employee.id}
-                className="hover:bg-slate-50 transition-colors">
-
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold">
-                          {employee.name.charAt(0)}
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-slate-900">
-                          {employee.name}
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {employee.email}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-slate-900">
-                      {employee.department}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.role === 'Admin' ? 'bg-purple-100 text-purple-800' : employee.role === 'Instructor' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-800'}`}>
-
-                      {employee.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${employee.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-
-                      {employee.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                    {employee.coursesEnrolled} Courses
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end space-x-2">
-                      <button
-                      onClick={() => handleOpenModal(employee)}
-                      className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded">
-
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                      onClick={() => handleDelete(employee.id)}
-                      className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded">
-
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                    No users found
                   </td>
                 </tr>
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold">
+                            {(user.fullName || user.name || '?').charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-slate-900">
+                            {user.fullName || user.name}
+                          </div>
+                          <div className="text-sm text-slate-500">{user.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-slate-900">
+                        {user.department || '-'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.role === 'Admin'
+                            ? 'bg-purple-100 text-purple-800'
+                            : user.role === 'Instructor'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-100 text-slate-800'
+                        }`}
+                      >
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          user.status === 'Active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {user.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => handleOpenModal(user)}
+                          className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -300,107 +394,131 @@ export function UserManagement() {
       </div>
 
       {/* Add/Edit Modal */}
-      {isModalOpen &&
-      <div className="fixed inset-0 z-50 overflow-y-auto">
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div
-            className="fixed inset-0 transition-opacity"
-            aria-hidden="true">
-
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
               <div className="absolute inset-0 bg-slate-500 opacity-75"></div>
             </div>
-            <span
-            className="hidden sm:inline-block sm:align-middle sm:h-screen"
-            aria-hidden="true">
-
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
               &#8203;
             </span>
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg leading-6 font-medium text-slate-900">
-                    {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
+                    {editingUser ? 'Edit User' : 'Add New User'}
                   </h3>
-                  <button
-                  onClick={handleCloseModal}
-                  className="text-slate-400 hover:text-slate-500">
-
+                  <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-500">
                     <X className="h-6 w-6" />
                   </button>
                 </div>
+
+                {formError && (
+                  <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-3 flex items-center">
+                    <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+                    <span className="text-sm text-red-700">{formError}</span>
+                  </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700">
-                      Full Name
+                      Full Name <span className="text-red-500">*</span>
                     </label>
                     <input
-                    type="text"
-                    defaultValue={editingEmployee?.name}
-                    className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
-
+                      ref={fullNameRef}
+                      type="text"
+                      defaultValue={editingUser?.fullName || editingUser?.name || ''}
+                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700">
-                      Email
+                      Email <span className="text-red-500">*</span>
                     </label>
                     <input
-                    type="email"
-                    defaultValue={editingEmployee?.email}
-                    className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
-
+                      ref={emailRef}
+                      type="email"
+                      defaultValue={editingUser?.email || ''}
+                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Password {!editingUser && <span className="text-red-500">*</span>}
+                      {editingUser && <span className="text-slate-400 text-xs ml-1">(leave blank to keep current)</span>}
+                    </label>
+                    <input
+                      ref={passwordRef}
+                      type="password"
+                      placeholder={editingUser ? '••••••••' : ''}
+                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">
+                        Role <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        ref={roleRef}
+                        defaultValue={editingUser?.role || 'Employee'}
+                        className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                      >
+                        <option value="Employee">Employee</option>
+                        <option value="Instructor">Instructor</option>
+                        <option value="Admin">Admin</option>
+                      </select>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700">
                         Department
                       </label>
                       <select
-                      defaultValue={editingEmployee?.department}
-                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
-
-                        <option>IT</option>
-                        <option>HR</option>
-                        <option>Operations</option>
-                        <option>Finance</option>
-                        <option>Marketing</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">
-                        Role
-                      </label>
-                      <select
-                      defaultValue={editingEmployee?.role}
-                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
-
-                        <option>Employee</option>
-                        <option>Instructor</option>
-                        <option>Admin</option>
+                        ref={departmentRef}
+                        defaultValue={editingUser?.department || ''}
+                        className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                      >
+                        <option value="">Select Department</option>
+                        <option value="IT">IT</option>
+                        <option value="HR">HR</option>
+                        <option value="Operations">Operations</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Marketing">Marketing</option>
                       </select>
                     </div>
                   </div>
                   <div className="flex items-center">
                     <input
-                    type="checkbox"
-                    defaultChecked={editingEmployee?.status === 'Active'}
-                    className="h-4 w-4 text-green-600 focus:ring-green-500 border-slate-300 rounded" />
-
-                    <label className="ml-2 block text-sm text-slate-900">
-                      Active Account
-                    </label>
+                      ref={statusRef}
+                      type="checkbox"
+                      defaultChecked={editingUser ? editingUser.status === 'Active' : true}
+                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-slate-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-slate-900">Active Account</label>
                   </div>
                   <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
                     <button
-                    type="submit"
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:col-start-2 sm:text-sm">
-
-                      Save
+                      type="submit"
+                      disabled={submitting}
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:col-start-2 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save'
+                      )}
                     </button>
                     <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:col-start-1 sm:text-sm">
-
+                      type="button"
+                      onClick={handleCloseModal}
+                      disabled={submitting}
+                      className="mt-3 w-full inline-flex justify-center rounded-md border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:col-start-1 sm:text-sm"
+                    >
                       Cancel
                     </button>
                   </div>
@@ -409,7 +527,7 @@ export function UserManagement() {
             </div>
           </div>
         </div>
-      }
-    </div>);
-
+      )}
+    </div>
+  );
 }

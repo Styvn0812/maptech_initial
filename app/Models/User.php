@@ -2,32 +2,30 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasApiTokens;
 
     /**
      * The attributes that are mass assignable.
-     *
-     * @var list<string>
      */
     protected $fillable = [
-        'name',
+        'fullName',
         'email',
         'password',
-        'role', // ✅ Added role
+        'role',
+        'department',
+        'status',
     ];
 
     /**
      * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
      */
     protected $hidden = [
         'password',
@@ -36,14 +34,80 @@ class User extends Authenticatable
 
     /**
      * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed', // auto-hash passwords
+            'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Get the role with proper capitalization.
+     */
+    public function getRoleAttribute($value): string
+    {
+        return ucfirst(strtolower($value ?? 'Employee'));
+    }
+
+    /**
+     * Set the role with lowercase storage.
+     */
+    public function setRoleAttribute($value): void
+    {
+        $this->attributes['role'] = strtolower($value ?? 'employee');
+    }
+
+    /**
+     * Check if user is active.
+     */
+    public function isActive(): bool
+    {
+        return $this->status === 'Active';
+    }
+
+    /**
+     * Check if user is admin.
+     */
+    public function isAdmin(): bool
+    {
+        return strtolower($this->role) === 'admin';
+    }
+
+    /**
+     * Check if user is instructor.
+     */
+    public function isInstructor(): bool
+    {
+        return strtolower($this->role) === 'instructor';
+    }
+
+    /**
+     * Check if user is employee.
+     */
+    public function isEmployee(): bool
+    {
+        return strtolower($this->role) === 'employee';
+    }
+
+    /**
+     * Get courses taught by this instructor.
+     */
+    public function courses(): HasMany
+    {
+        return $this->hasMany(Course::class, 'instructor_id');
+    }
+
+    /**
+     * Get courses available for this employee based on department.
+     */
+    public function availableCourses()
+    {
+        if (!$this->department) {
+            return Course::query()->whereRaw('1 = 0'); // Return empty
+        }
+
+        return Course::forDepartment($this->department)->active();
     }
 }

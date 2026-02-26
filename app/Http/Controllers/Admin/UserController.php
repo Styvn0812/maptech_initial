@@ -1,0 +1,173 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\Course;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+
+class UserController extends Controller
+{
+    /**
+     * Get all users.
+     */
+    public function index(Request $request)
+    {
+        $query = User::query();
+
+        // Filter by role
+        if ($request->has('role')) {
+            $query->where('role', $request->role);
+        }
+
+        // Filter by department
+        if ($request->has('department')) {
+            $query->where('department', $request->department);
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $users = $query->select([
+            'id', 'fullName', 'email', 'role', 'department', 'status', 'created_at'
+        ])->orderBy('created_at', 'desc')->get();
+
+        return response()->json($users);
+    }
+
+    /**
+     * Create a new user.
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'fullName' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:8',
+            'role' => ['required', Rule::in(['Admin', 'Instructor', 'Employee'])],
+            'department' => 'nullable|string|max:255',
+            'status' => ['nullable', Rule::in(['Active', 'Inactive'])],
+        ]);
+
+        // Require department for Employees
+        if ($validated['role'] === 'Employee' && empty($validated['department'])) {
+            return response()->json([
+                'message' => 'Department is required for Employee role.',
+                'errors' => ['department' => ['Department is required for Employee role.']]
+            ], 422);
+        }
+
+        $user = User::create([
+            'name' => $validated['fullName'],
+            'fullName' => $validated['fullName'],
+            'email' => $validated['email'],
+            'password' => $validated['password'], // Auto-hashed by model
+            'role' => $validated['role'],
+            'department' => $validated['department'] ?? null,
+            'status' => $validated['status'] ?? 'Active',
+        ]);
+
+        return response()->json([
+            'message' => 'User created successfully',
+            'user' => $user
+        ], 201);
+    }
+
+    /**
+     * Get a specific user.
+     */
+    public function show(string $id)
+    {
+        $user = User::findOrFail($id);
+
+        return response()->json($user);
+    }
+
+    /**
+     * Update a user.
+     */
+    public function update(Request $request, string $id)
+    {
+        $user = User::findOrFail($id);
+
+        $validated = $request->validate([
+            'fullName' => 'sometimes|string|max:255',
+            'email' => ['sometimes', 'email', Rule::unique('users')->ignore($id)],
+            'password' => 'sometimes|string|min:8',
+            'role' => ['sometimes', Rule::in(['Admin', 'Instructor', 'Employee'])],
+            'department' => 'nullable|string|max:255',
+            'status' => ['sometimes', Rule::in(['Active', 'Inactive'])],
+        ]);
+
+        // Require department for Employees
+        $newRole = $validated['role'] ?? $user->role;
+        if ($newRole === 'Employee' && isset($validated['department']) && empty($validated['department'])) {
+            return response()->json([
+                'message' => 'Department is required for Employee role.',
+                'errors' => ['department' => ['Department is required for Employee role.']]
+            ], 422);
+        }
+
+        // Update fields
+        if (isset($validated['fullName'])) {
+            $user->name = $validated['fullName'];
+            $user->fullName = $validated['fullName'];
+        }
+        if (isset($validated['email'])) {
+            $user->email = $validated['email'];
+        }
+        if (isset($validated['password'])) {
+            $user->password = $validated['password'];
+        }
+        if (isset($validated['role'])) {
+            $user->role = $validated['role'];
+        }
+        if (array_key_exists('department', $validated)) {
+            $user->department = $validated['department'];
+        }
+        if (isset($validated['status'])) {
+            $user->status = $validated['status'];
+        }
+
+        $user->save();
+
+        return response()->json([
+            'message' => 'User updated successfully',
+            'user' => $user
+        ]);
+    }
+
+    /**
+     * Delete a user.
+     */
+    public function destroy(string $id)
+    {
+        $user = User::findOrFail($id);
+        $user->delete();
+
+        return response()->json([
+            'message' => 'User deleted successfully'
+        ]);
+    }
+
+    /**
+     * Get admin dashboard stats.
+     */
+    public function dashboard()
+    {
+        return response()->json([
+            'total_users' => User::count(),
+            'active_users' => User::where('status', 'Active')->count(),
+            'inactive_users' => User::where('status', 'Inactive')->count(),
+            'admins' => User::where('role', 'Admin')->count(),
+            'instructors' => User::where('role', 'Instructor')->count(),
+            'employees' => User::where('role', 'Employee')->count(),
+            'total_courses' => Course::count(),
+        ]);
+    }
+}

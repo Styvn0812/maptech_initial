@@ -34,6 +34,7 @@ interface User {
   role: 'admin' | 'instructor' | 'employee';
   name: string;
   email: string;
+  department?: string;
 }
 
 export function App() {
@@ -58,9 +59,10 @@ export function App() {
         if (response.ok) {
           const data = await response.json();
           setUser({
-            role: data.role,
+            role: data.role?.toLowerCase(),
             name: data.name,
             email: data.email,
+            department: data.department,
           });
         }
       } catch (error) {
@@ -79,9 +81,10 @@ export function App() {
   const handleLogin = async (
     role: 'admin' | 'instructor' | 'employee',
     name: string,
-    email: string
+    email: string,
+    department?: string
   ) => {
-    setUser({ role, name, email });
+    setUser({ role, name, email, department });
     setCurrentPage('dashboard');
   };
 

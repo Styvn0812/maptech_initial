@@ -5,7 +5,8 @@ interface LoginPageProps {
   onLogin: (
     role: 'admin' | 'instructor' | 'employee',
     name: string,
-    email: string
+    email: string,
+    department?: string
   ) => void;
 }
 
@@ -53,7 +54,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Invalid credentials');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Invalid credentials');
       }
 
       const data = await response.json();
@@ -61,10 +63,16 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       setEmail('');
       setPassword('');
 
-      onLogin(data.role, data.name, data.email);
+      // Pass role (lowercase), name, email, and department
+      onLogin(
+        data.role?.toLowerCase() as 'admin' | 'instructor' | 'employee',
+        data.name,
+        data.email,
+        data.department
+      );
 
-    } catch (err) {
-      setError('Invalid credentials.');
+    } catch (err: any) {
+      setError(err.message || 'Invalid credentials.');
     } finally {
       setLoading(false);
     }

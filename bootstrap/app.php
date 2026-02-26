@@ -12,7 +12,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Add Sanctum stateful middleware for API routes (session-based SPA auth)
+        $middleware->statefulApi();
+
+        // Register middleware aliases
+        $middleware->alias([
+            'role' => \App\Http\Middleware\AuthorizeRole::class,
+            'status' => \App\Http\Middleware\CheckAccountStatus::class,
+            'department' => \App\Http\Middleware\DepartmentAccess::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

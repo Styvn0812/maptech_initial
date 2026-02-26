@@ -107,3 +107,92 @@ Route::delete('/subdepartments/{id}', function ($id) {
         'message' => 'Subdepartment deleted successfully'
     ]);
 });
+
+
+/*
+|--------------------------------------------------------------------------
+| AUTHENTICATION ROUTES
+|--------------------------------------------------------------------------
+*/
+
+use App\Http\Controllers\LoginController;
+
+// API Token Login (JWT-like)
+Route::post('/login', [LoginController::class, 'apiLogin']);
+
+// Get authenticated user
+Route::get('/user', [LoginController::class, 'user'])
+    ->middleware(['auth:sanctum', 'status']);
+
+// Logout
+Route::post('/logout', [LoginController::class, 'logout'])
+    ->middleware('auth:sanctum');
+
+
+/*
+|--------------------------------------------------------------------------
+| ADMIN ROUTES - Role: Admin Only
+|--------------------------------------------------------------------------
+*/
+
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\CourseController as AdminCourseController;
+
+Route::prefix('admin')->middleware(['auth:sanctum', 'status', 'role:Admin'])->group(function () {
+
+    // Dashboard
+    Route::get('/dashboard', [UserController::class, 'dashboard']);
+
+    // User Management
+    Route::get('/users', [UserController::class, 'index']);
+    Route::post('/users', [UserController::class, 'store']);
+    Route::get('/users/{id}', [UserController::class, 'show']);
+    Route::put('/users/{id}', [UserController::class, 'update']);
+    Route::delete('/users/{id}', [UserController::class, 'destroy']);
+
+    // Course Management (Admin can manage all courses)
+    Route::get('/courses', [AdminCourseController::class, 'index']);
+    Route::post('/courses', [AdminCourseController::class, 'store']);
+    Route::get('/courses/{id}', [AdminCourseController::class, 'show']);
+    Route::put('/courses/{id}', [AdminCourseController::class, 'update']);
+    Route::delete('/courses/{id}', [AdminCourseController::class, 'destroy']);
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| INSTRUCTOR ROUTES - Role: Instructor Only
+|--------------------------------------------------------------------------
+*/
+
+use App\Http\Controllers\Instructor\CourseController as InstructorCourseController;
+
+Route::prefix('instructor')->middleware(['auth:sanctum', 'status', 'role:Instructor'])->group(function () {
+
+    // Dashboard
+    Route::get('/dashboard', [InstructorCourseController::class, 'dashboard']);
+
+    // Instructor's own courses
+    Route::get('/courses', [InstructorCourseController::class, 'index']);
+    Route::put('/courses/{id}', [InstructorCourseController::class, 'update']);
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| EMPLOYEE ROUTES - Role: Employee Only + Department Access
+|--------------------------------------------------------------------------
+*/
+
+use App\Http\Controllers\Employee\DashboardController;
+
+Route::prefix('employee')->middleware(['auth:sanctum', 'status', 'role:Employee', 'department'])->group(function () {
+
+    // Dashboard (auto-filtered by department)
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    // Courses (auto-filtered by department)
+    Route::get('/courses', [DashboardController::class, 'courses']);
+    Route::get('/courses/{id}', [DashboardController::class, 'showCourse']);
+});
+
