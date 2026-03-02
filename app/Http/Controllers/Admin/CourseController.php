@@ -140,20 +140,68 @@ class CourseController extends Controller
     {
         $course = Course::findOrFail($id);
 
-        $validated = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'department' => 'sometimes|string|max:255',
-            'instructor_id' => 'nullable|exists:users,id',
-            'status' => ['sometimes', Rule::in(['Active', 'Inactive', 'Draft'])],
+        \Log::info('Request received for course update', [
+            'id' => $id,
+            'all_keys' => array_keys($request->all()),
+            'has_files' => $request->hasFile('modules'),
         ]);
 
-        $course->update($validated);
+        try {
+            $validated = $request->validate([
+                'title' => 'sometimes|string|max:255',
+                'description' => 'nullable|string',
+                'department' => 'sometimes|string|max:255',
+                'instructor_id' => 'nullable|exists:users,id',
+                'status' => ['sometimes', Rule::in(['Active', 'Inactive', 'Draft'])],
+                'modules' => 'nullable|array',
+                'modules.*.title' => 'nullable|string|max:255',
+                'modules.*.content' => 'nullable|file|max:102400',
+            ]);
 
-        return response()->json([
-            'message' => 'Course updated successfully',
-            'course' => $course->load('instructor:id,fullName,email')
-        ]);
+            $course->update(array_filter($validated, function ($k) {
+                return in_array($k, ['title', 'description', 'department', 'instructor_id', 'status']);
+            }, ARRAY_FILTER_USE_KEY));
+
+            if (!empty($validated['modules'])) {
+                \Log::info('Processing modules for update', ['count' => count($validated['modules'])]);
+                foreach ($validated['modules'] as $index => $module) {
+                    \Log::info("Processing module {$index}", [
+                        'title' => $module['title'] ?? 'NO TITLE',
+                        'has_content' => isset($module['content']),
+                    ]);
+
+                    if (isset($module['content']) && $module['content'] instanceof \Illuminate\Http\UploadedFile) {
+                        $filePath = $module['content']->store('course-content', 'public');
+                        \Log::info("File stored at: {$filePath}");
+                        $course->modules()->create([
+                            'title' => $module['title'] ?? 'Untitled Module',
+                            'content_path' => $filePath,
+                        ]);
+                    } else {
+                        \Log::warning("Module {$index} has no valid content file");
+                    }
+                }
+            } else {
+                \Log::info('No modules to process on update');
+            }
+
+            return response()->json([
+                'message' => 'Course updated successfully',
+                'course' => $course->load('instructor:id,fullName,email', 'modules')
+            ]);
+        } catch (ValidationException $e) {
+            \Log::error('Validation failed on update', $e->errors());
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (Exception $e) {
+            \Log::error('An error occurred on update', ['error' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'An error occurred while updating the course',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
