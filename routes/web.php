@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\LoginController;
+use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\CourseController;
 
 /*
 |--------------------------------------------------------------------------
@@ -19,6 +22,23 @@ Route::get('/', function () {
 // LOGIN
 // =====================
 Route::post('/login', [LoginController::class, 'login']);
+
+Route::get('/admin/users', [UserManagementController::class, 'index'])
+    ->middleware(['auth', 'role:admin']);
+
+Route::post('/admin/users', [UserManagementController::class, 'store'])
+    ->middleware(['auth', 'role:admin']);
+
+Route::get('/courses', [CourseController::class, 'index'])
+    ->middleware(['auth', 'role:admin,instructor']);
+
+Route::post('/courses', [CourseController::class, 'store'])
+    ->middleware(['auth', 'role:admin,instructor']);
+
+Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect'])
+    ->middleware('auth');
+
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 
 // =====================
 // LOGOUT
@@ -50,8 +70,11 @@ Route::get('/user', function (Request $request) {
     return response()->json([
         'id'    => $request->user()->id,
         'name'  => $request->user()->name,
+        'username' => $request->user()->username,
         'email' => $request->user()->email,
         'role'  => $request->user()->role,
+        'status' => $request->user()->status,
+        'is_google_verified' => $request->user()->is_google_verified,
     ]);
 
 })->middleware('auth');

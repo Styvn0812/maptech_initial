@@ -1,119 +1,125 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Search,
   Plus,
   Edit2,
   Trash2,
-  Eye,
   Filter,
-  MoreVertical,
   X } from
 'lucide-react';
 interface Employee {
   id: number;
   name: string;
+  username: string;
   email: string;
-  department: string;
   role: 'Admin' | 'Instructor' | 'Employee';
   status: 'Active' | 'Inactive';
+  isGoogleVerified: boolean;
   coursesEnrolled: number;
 }
-const initialEmployees: Employee[] = [
-{
-  id: 1,
-  name: 'Juan Dela Cruz',
-  email: 'juan.delacruz@maptech.com',
-  department: 'IT',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 4
-},
-{
-  id: 2,
-  name: 'Maria Santos',
-  email: 'maria.santos@maptech.com',
-  department: 'HR',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 2
-},
-{
-  id: 3,
-  name: 'Prof. Ana Reyes',
-  email: 'ana.reyes@maptech.com',
-  department: 'IT',
-  role: 'Instructor',
-  status: 'Active',
-  coursesEnrolled: 0
-},
-{
-  id: 4,
-  name: 'Jose Rizal',
-  email: 'jose.rizal@maptech.com',
-  department: 'Operations',
-  role: 'Admin',
-  status: 'Active',
-  coursesEnrolled: 0
-},
-{
-  id: 5,
-  name: 'Elena Reyes',
-  email: 'elena.reyes@maptech.com',
-  department: 'Finance',
-  role: 'Employee',
-  status: 'Inactive',
-  coursesEnrolled: 1
-},
-{
-  id: 6,
-  name: 'Antonio Luna',
-  email: 'antonio.luna@maptech.com',
-  department: 'Marketing',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 3
-},
-{
-  id: 7,
-  name: 'Gabriela Silang',
-  email: 'gabriela.silang@maptech.com',
-  department: 'IT',
-  role: 'Employee',
-  status: 'Active',
-  coursesEnrolled: 5
-},
-{
-  id: 8,
-  name: 'Andres Bonifacio',
-  email: 'andres.bonifacio@maptech.com',
-  department: 'Operations',
-  role: 'Instructor',
-  status: 'Active',
-  coursesEnrolled: 0
-},
-{
-  id: 9,
-  name: 'Teresa Magbanua',
-  email: 'teresa.magbanua@maptech.com',
-  department: 'HR',
-  role: 'Employee',
-  status: 'Inactive',
-  coursesEnrolled: 0
-}];
+
+interface UserApiItem {
+  id: number;
+  name: string;
+  username: string;
+  email: string;
+  role: 'admin' | 'instructor' | 'employee';
+  status: 'active' | 'inactive' | 'pending';
+  is_google_verified: boolean;
+}
+
+interface FormData {
+  name: string;
+  email: string;
+  password: string;
+  role: 'admin' | 'instructor' | 'employee';
+  isActive: boolean;
+}
+
+const defaultFormData: FormData = {
+  name: '',
+  email: '',
+  password: '',
+  role: 'employee',
+  isActive: true,
+};
+
+const mapRole = (role: UserApiItem['role']): Employee['role'] => {
+  if (role === 'admin') return 'Admin';
+  if (role === 'instructor') return 'Instructor';
+  return 'Employee';
+};
+
+const mapStatus = (status: UserApiItem['status']): Employee['status'] => {
+  if (status === 'active') return 'Active';
+  return 'Inactive';
+};
 
 export function UserManagement() {
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All Roles');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [formData, setFormData] = useState<FormData>(defaultFormData);
+
+  const getCookie = (name: string) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+    return '';
+  };
+
+  const loadUsers = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/admin/users', {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load users');
+      }
+
+      const data: UserApiItem[] = await response.json();
+      const mapped: Employee[] = data.map((user) => ({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        role: mapRole(user.role),
+        status: mapStatus(user.status),
+        isGoogleVerified: user.is_google_verified,
+        coursesEnrolled: 0,
+      }));
+
+      setEmployees(mapped);
+    } catch (loadError) {
+      setError('Failed to load users. Please refresh and try again.');
+      console.error(loadError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
   // Filter Logic
   const filteredEmployees = employees.filter((emp) => {
     const matchesSearch =
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept =
-    departmentFilter === 'All' || emp.department === departmentFilter;
+    departmentFilter === 'All Roles' || emp.role === departmentFilter;
     return matchesSearch && matchesDept;
   });
   // Delete Handler
@@ -128,19 +134,64 @@ export function UserManagement() {
       setEditingEmployee(employee);
     } else {
       setEditingEmployee(null);
+      setFormData(defaultFormData);
     }
     setIsModalOpen(true);
   };
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingEmployee(null);
+    setFormData(defaultFormData);
   };
-  // Form Submit Handler (Mock)
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, we'd gather form data here
+
+    if (editingEmployee) {
+      alert('Edit is not connected yet.');
+      return;
+    }
+
+    try {
+      await fetch('http://127.0.0.1:8000/sanctum/csrf-cookie', {
+        credentials: 'include',
+      });
+
+      const xsrfToken = getCookie('XSRF-TOKEN');
+
+      const response = await fetch('http://127.0.0.1:8000/admin/users', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-XSRF-TOKEN': decodeURIComponent(xsrfToken || ''),
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
+          is_active: formData.isActive,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json();
+        const firstError = payload?.errors ? Object.values(payload.errors)[0] : null;
+        const firstMessage = Array.isArray(firstError) ? firstError[0] : payload?.message;
+        throw new Error(firstMessage || 'Failed to create user');
+      }
+
+      await loadUsers();
+      alert('User account created successfully.');
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : 'Failed to save user';
+      alert(message);
+    }
+
     handleCloseModal();
-    alert('User saved successfully!');
   };
   return (
     <div className="space-y-6">
@@ -151,7 +202,7 @@ export function UserManagement() {
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
 
           <Plus className="h-4 w-4 mr-2" />
-          Add Employee
+          Add Account
         </button>
       </div>
 
@@ -179,16 +230,17 @@ export function UserManagement() {
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}>
 
-              <option value="All">All Departments</option>
-              <option value="IT">IT</option>
-              <option value="HR">HR</option>
-              <option value="Operations">Operations</option>
-              <option value="Finance">Finance</option>
-              <option value="Marketing">Marketing</option>
+              <option value="All Roles">All Roles</option>
+              <option value="Admin">Admin</option>
+              <option value="Instructor">Instructor</option>
+              <option value="Employee">Employee</option>
             </select>
           </div>
         </div>
       </div>
+
+      {loading && <div className="text-sm text-slate-500">Loading users...</div>}
+      {error && <div className="text-sm text-red-600">{error}</div>}
 
       {/* Table */}
       <div className="bg-white shadow-sm rounded-lg border border-slate-200 overflow-hidden">
@@ -206,7 +258,7 @@ export function UserManagement() {
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
 
-                  Department
+                  Account
                 </th>
                 <th
                   scope="col"
@@ -256,7 +308,7 @@ export function UserManagement() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-slate-900">
-                      {employee.department}
+                      {employee.username}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -272,6 +324,9 @@ export function UserManagement() {
 
                       {employee.status}
                     </span>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {employee.isGoogleVerified ? 'Google Verified' : 'Google Not Verified'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                     {employee.coursesEnrolled} Courses
@@ -319,7 +374,7 @@ export function UserManagement() {
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg leading-6 font-medium text-slate-900">
-                    {editingEmployee ? 'Edit Employee' : 'Add New Employee'}
+                    {editingEmployee ? 'Edit Account' : 'Add New Account'}
                   </h3>
                   <button
                   onClick={handleCloseModal}
@@ -335,7 +390,9 @@ export function UserManagement() {
                     </label>
                     <input
                     type="text"
-                    defaultValue={editingEmployee?.name}
+                    value={formData.name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    required
                     className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
 
                   </div>
@@ -345,47 +402,49 @@ export function UserManagement() {
                     </label>
                     <input
                     type="email"
-                    defaultValue={editingEmployee?.email}
+                    value={formData.email}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                    required
+                    className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
+
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Password
+                    </label>
+                    <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                    required
                     className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
 
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700">
-                        Department
-                      </label>
-                      <select
-                      defaultValue={editingEmployee?.department}
-                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
-
-                        <option>IT</option>
-                        <option>HR</option>
-                        <option>Operations</option>
-                        <option>Finance</option>
-                        <option>Marketing</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">
                         Role
                       </label>
                       <select
-                      defaultValue={editingEmployee?.role}
+                      value={formData.role}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as 'admin' | 'instructor' | 'employee' }))}
                       className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
 
-                        <option>Employee</option>
-                        <option>Instructor</option>
-                        <option>Admin</option>
+                        <option value="admin">Admin</option>
+                        <option value="employee">Employee</option>
+                        <option value="instructor">Instructor</option>
                       </select>
                     </div>
                   </div>
                   <div className="flex items-center">
                     <input
+                    id="activeAccount"
                     type="checkbox"
-                    defaultChecked={editingEmployee?.status === 'Active'}
+                    checked={formData.isActive}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, isActive: e.target.checked }))}
                     className="h-4 w-4 text-green-600 focus:ring-green-500 border-slate-300 rounded" />
 
-                    <label className="ml-2 block text-sm text-slate-900">
+                    <label htmlFor="activeAccount" className="ml-2 block text-sm text-slate-900">
                       Active Account
                     </label>
                   </div>

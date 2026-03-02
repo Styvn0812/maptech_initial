@@ -1,4 +1,4 @@
-    import React, { useState } from 'react';
+    import React, { useEffect, useState } from 'react';
     import {
       Plus,
       Video,
@@ -12,6 +12,15 @@
       GripVertical,
       File } from
     'lucide-react';
+
+    interface CourseItem {
+      id: number;
+      title: string;
+      description: string | null;
+      department: string | null;
+      status: 'active' | 'draft' | 'archived';
+    }
+
     interface Lesson {
       id: number;
       title: string;
@@ -96,14 +105,43 @@
     }];
 
     export function LessonVideoUpload() {
-      const [selectedCourse, setSelectedCourse] = useState(
-        'Cybersecurity Fundamentals'
-      );
+      const [selectedCourse, setSelectedCourse] = useState('');
+      const [courses, setCourses] = useState<CourseItem[]>([]);
       const [modules, setModules] = useState<Module[]>(initialModules);
       const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
       const [uploadType, setUploadType] = useState<'video' | 'document' | 'text'>(
         'video'
       );
+
+      const loadCourses = async () => {
+        try {
+          const response = await fetch('http://127.0.0.1:8000/courses', {
+            credentials: 'include',
+            headers: {
+              Accept: 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to load courses.');
+          }
+
+          const data: CourseItem[] = await response.json();
+          setCourses(data);
+
+          if (!selectedCourse && data.length > 0) {
+            setSelectedCourse(data[0].title);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      useEffect(() => {
+        loadCourses();
+      }, []);
+
       const toggleModule = (id: number) => {
         setModules(
           modules.map((m) =>
@@ -166,9 +204,10 @@
               onChange={(e) => setSelectedCourse(e.target.value)}
               className="block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm rounded-md border">
 
-              <option>Cybersecurity Fundamentals</option>
-              <option>Leadership Training 101</option>
-              <option>Data Privacy Compliance</option>
+              {courses.length === 0 && <option>No courses available</option>}
+              {courses.map((course) => (
+                <option key={course.id}>{course.title}</option>
+              ))}
             </select>
           </div>
 

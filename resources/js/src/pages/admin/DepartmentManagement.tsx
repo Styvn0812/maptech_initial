@@ -26,10 +26,18 @@ interface Department {
   subdepartments: Subdepartment[];
 }
 
+interface AccountUser {
+  id: number;
+  name: string;
+  role: "admin" | "instructor" | "employee";
+  status: "active" | "inactive" | "pending";
+}
+
 export default function DepartmentManagement() {
   const API = "http://127.0.0.1:8000/api";
 
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentHeads, setDepartmentHeads] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,8 +72,34 @@ export default function DepartmentManagement() {
     }
   };
 
+  const loadDepartmentHeads = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/admin/users", {
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+
+      if (!res.ok) throw new Error("Failed to load account users");
+
+      const users: AccountUser[] = await res.json();
+      const heads = users
+        .filter((user) => (user.role === "admin" || user.role === "instructor") && user.status === "active")
+        .map((user) => user.name)
+        .filter((name, index, arr) => arr.indexOf(name) === index)
+        .sort((a, b) => a.localeCompare(b));
+
+      setDepartmentHeads(heads);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     loadDepartments();
+    loadDepartmentHeads();
   }, []);
 
   // ================= SAVE DEPARTMENT =================
@@ -235,10 +269,13 @@ export default function DepartmentManagement() {
             value={deptForm.code}
             onChange={(v) => setDeptForm({ ...deptForm, code: v })}
           />
-          <Input
-            placeholder="Department Head"
+          <SelectInput
             value={deptForm.head}
             onChange={(v) => setDeptForm({ ...deptForm, head: v })}
+            options={deptForm.head && !departmentHeads.includes(deptForm.head)
+              ? [deptForm.head, ...departmentHeads]
+              : departmentHeads}
+            placeholder="Select Department Head"
           />
           <Input
             placeholder="Description"
@@ -348,5 +385,32 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+function SelectInput({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder: string;
+}) {
+  return (
+    <select
+      className="w-full border rounded-md px-3 py-2 mb-3"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
   );
 }

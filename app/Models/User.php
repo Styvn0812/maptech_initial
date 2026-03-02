@@ -19,9 +19,14 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
-        'role', // ✅ Added role
+        'role',
+        'status',
+        'is_google_verified',
+        'google_id',
+        'invited_by',
     ];
 
     /**
@@ -43,7 +48,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed', // auto-hash passwords
+            'is_google_verified' => 'boolean',
+            'password' => 'hashed',
         ];
     }
 }

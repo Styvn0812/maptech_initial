@@ -17,6 +17,7 @@ import { NotificationManagement } from './pages/admin/NotificationManagement';
 
 // Instructor Pages
 import { InstructorDashboard } from './pages/instructor/InstructorDashboard';
+import { InstructorCourseManagement } from './pages/instructor/InstructorCourseManagement';
 import { LessonVideoUpload } from './pages/instructor/LessonVideoUpload';
 import { QuizAssessmentManagement } from './pages/instructor/QuizAssessmentManagement';
 import { QuizEvaluation } from './pages/instructor/QuizEvaluation';
@@ -179,6 +180,7 @@ export function App() {
         user={user}
       >
         {currentPage === 'dashboard' && <InstructorDashboard />}
+        {currentPage === 'courses' && <InstructorCourseManagement />}
         {currentPage === 'lessons' && <LessonVideoUpload />}
         {currentPage === 'quizzes' && <QuizAssessmentManagement />}
         {currentPage === 'evaluation' && <QuizEvaluation />}

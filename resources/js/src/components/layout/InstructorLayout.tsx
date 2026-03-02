@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   LayoutDashboard,
+  BookOpen,
   Video,
   ClipboardCheck,
   CheckSquare,
@@ -32,6 +33,11 @@ export function InstructorLayout({
     id: 'dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard
+  },
+  {
+    id: 'courses',
+    label: 'Courses',
+    icon: BookOpen
   },
   {
     id: 'lessons',
