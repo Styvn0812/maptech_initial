@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoginPage } from './pages/LoginPage';
 import { QADiscussion as InstructorQADiscussion } from './pages/instructor/QADiscussion';
 import { QADiscussion as AdminQADiscussion } from './pages/admin/QADiscussion';
@@ -34,11 +34,46 @@ interface User {
   role: 'admin' | 'instructor' | 'employee';
   name: string;
   email: string;
+  department?: string;
 }
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // =========================
+  // CHECK AUTH ON MOUNT
+  // =========================
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/user', {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setUser({
+            role: data.role?.toLowerCase(),
+            name: data.name,
+            email: data.email,
+            department: data.department,
+          });
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
 
   // =========================
   // HANDLE LOGIN
@@ -46,10 +81,18 @@ export function App() {
   const handleLogin = async (
     role: 'admin' | 'instructor' | 'employee',
     name: string,
-    email: string
+    email: string,
+    department?: string
   ) => {
-    setUser({ role, name, email });
+    setUser({ role, name, email, department });
     setCurrentPage('dashboard');
+  };
+
+  // ✅ Function to get cookie value
+  const getCookie = (name: string) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
   };
 
   // =========================
@@ -57,11 +100,20 @@ export function App() {
   // =========================
   const handleLogout = async () => {
     try {
-      await fetch('/logout', {
+      // Get CSRF token
+      await fetch('http://127.0.0.1:8000/sanctum/csrf-cookie', {
+        credentials: 'include',
+      });
+
+      const xsrfToken = getCookie('XSRF-TOKEN');
+
+      await fetch('http://127.0.0.1:8000/logout', {
         method: 'POST',
         credentials: 'include',
         headers: {
+          'Accept': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
+          'X-XSRF-TOKEN': decodeURIComponent(xsrfToken || ''),
         },
       });
     } catch (error) {
@@ -75,6 +127,17 @@ export function App() {
   const handleNavigate = (page: string) => {
     setCurrentPage(page);
   };
+
+  // =========================
+  // LOADING STATE
+  // =========================
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-slate-600">Loading...</div>
+      </div>
+    );
+  }
 
   // =========================
   // NOT AUTHENTICATED

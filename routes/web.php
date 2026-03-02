@@ -16,42 +16,16 @@ Route::get('/', function () {
 });
 
 // =====================
-// LOGIN
+// LOGIN (Session-based for SPA)
 // =====================
 Route::post('/login', [LoginController::class, 'login']);
 
 // =====================
 // LOGOUT
 // =====================
-Route::post('/logout', function (Request $request) {
-
-    Auth::logout();
-
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-
-    return response()->json([
-        'message' => 'Logged out successfully'
-    ]);
-
-})->middleware('auth');
+Route::post('/logout', [LoginController::class, 'logout'])->middleware('auth');
 
 // =====================
 // GET AUTH USER
 // =====================
-Route::get('/user', function (Request $request) {
-
-    if (!$request->user()) {
-        return response()->json([
-            'message' => 'Unauthenticated'
-        ], 401);
-    }
-
-    return response()->json([
-        'id'    => $request->user()->id,
-        'name'  => $request->user()->name,
-        'email' => $request->user()->email,
-        'role'  => $request->user()->role,
-    ]);
-
-})->middleware('auth');
+Route::get('/user', [LoginController::class, 'user'])->middleware('auth');

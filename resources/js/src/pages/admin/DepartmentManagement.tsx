@@ -36,9 +36,12 @@ export default function DepartmentManagement() {
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [showSubModal, setShowSubModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeleteSubModal, setShowDeleteSubModal] = useState(false);
 
   const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
+  const [selectedSubId, setSelectedSubId] = useState<number | null>(null);
   const [editing, setEditing] = useState<Department | null>(null);
+  const [editingSub, setEditingSub] = useState<Subdepartment | null>(null);
 
   const [deptForm, setDeptForm] = useState({
     name: "",
@@ -90,21 +93,45 @@ export default function DepartmentManagement() {
     loadDepartments();
   };
 
-  // ================= ADD SUB =================
+  // ================= ADD/EDIT SUB =================
   const handleSaveSub = async () => {
-    if (!selectedDeptId) return;
-
-    await fetch(
-      `${API}/departments/${selectedDeptId}/subdepartments`,
-      {
-        method: "POST",
+    if (editingSub) {
+      // Edit existing subdepartment
+      await fetch(`${API}/subdepartments/${editingSub.id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: subName }),
-      }
-    );
+      });
+    } else {
+      // Add new subdepartment
+      if (!selectedDeptId) return;
+
+      await fetch(
+        `${API}/departments/${selectedDeptId}/subdepartments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: subName }),
+        }
+      );
+    }
 
     setSubName("");
+    setEditingSub(null);
     setShowSubModal(false);
+    loadDepartments();
+  };
+
+  // ================= DELETE SUB =================
+  const confirmDeleteSub = async () => {
+    if (!selectedSubId) return;
+
+    await fetch(`${API}/subdepartments/${selectedSubId}`, {
+      method: "DELETE",
+    });
+
+    setShowDeleteSubModal(false);
+    setSelectedSubId(null);
     loadDepartments();
   };
 
@@ -165,17 +192,42 @@ export default function DepartmentManagement() {
               Head: <span className="font-medium">{dept.head}</span>
             </p>
 
+            {/* DESCRIPTION */}
+            {dept.description && (
+              <p className="text-sm text-gray-500 mb-3">
+                {dept.description}
+              </p>
+            )}
+
             {/* SUBDEPARTMENTS */}
             {dept.subdepartments?.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="mb-3">
+                <p className="text-xs text-gray-500 mb-2 font-medium">Subdepartments:</p>
+                <div className="flex flex-wrap gap-2">
                 {dept.subdepartments.map((sub) => (
                   <span
                     key={sub.id}
-                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"
+                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1 group"
                   >
                     {sub.name}
+                    <Pencil
+                      onClick={() => {
+                        setEditingSub(sub);
+                        setSubName(sub.name);
+                        setShowSubModal(true);
+                      }}
+                      className="w-3 h-3 cursor-pointer opacity-0 group-hover:opacity-100 hover:text-blue-900"
+                    />
+                    <X
+                      onClick={() => {
+                        setSelectedSubId(sub.id);
+                        setShowDeleteSubModal(true);
+                      }}
+                      className="w-3 h-3 cursor-pointer opacity-0 group-hover:opacity-100 hover:text-red-600"
+                    />
                   </span>
                 ))}
+                </div>
               </div>
             )}
 
@@ -259,9 +311,13 @@ export default function DepartmentManagement() {
 
       {/* ================= SUB MODAL ================= */}
       {showSubModal && (
-        <Modal onClose={() => setShowSubModal(false)}>
+        <Modal onClose={() => {
+          setShowSubModal(false);
+          setEditingSub(null);
+          setSubName("");
+        }}>
           <h2 className="text-lg font-semibold mb-4">
-            Add Subdepartment
+            {editingSub ? "Edit Subdepartment" : "Add Subdepartment"}
           </h2>
 
           <Input
@@ -274,7 +330,7 @@ export default function DepartmentManagement() {
             onClick={handleSaveSub}
             className="w-full mt-4 bg-green-600 text-white py-2 rounded-md"
           >
-            Save Subdepartment
+            {editingSub ? "Update Subdepartment" : "Save Subdepartment"}
           </button>
         </Modal>
       )}
@@ -296,6 +352,31 @@ export default function DepartmentManagement() {
 
             <button
               onClick={confirmDelete}
+              className="px-4 py-2 bg-red-600 text-white rounded-md"
+            >
+              Delete
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ================= DELETE SUB MODAL ================= */}
+      {showDeleteSubModal && (
+        <Modal onClose={() => setShowDeleteSubModal(false)}>
+          <h2 className="text-lg font-semibold mb-4">
+            Delete this subdepartment?
+          </h2>
+
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowDeleteSubModal(false)}
+              className="px-4 py-2 border rounded-md"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={confirmDeleteSub}
               className="px-4 py-2 bg-red-600 text-white rounded-md"
             >
               Delete
