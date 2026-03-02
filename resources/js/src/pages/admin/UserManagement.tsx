@@ -71,15 +71,15 @@ export function UserManagement() {
 
       if (!response.ok) {
         if (response.status === 403) {
-          throw new Error('Access denied. Admin privileges required.');
+          throw new Error('Access denied. You are not authorized to view this data.');
         }
-        throw new Error('Failed to load users');
+        throw new Error('Failed to load data');
       }
 
       const data = await response.json();
-      setUsers(data);
+      setUsers(data); // Correctly assign the response data to users
     } catch (err: any) {
-      setError(err.message || 'Failed to load users');
+      setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -172,6 +172,14 @@ export function UserManagement() {
       return;
     }
 
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    console.log('CSRF Token:', csrfToken); // Debugging CSRF token
+    if (!csrfToken) {
+      setFormError('CSRF token not found. Please refresh the page and try again.');
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const url = editingUser
         ? `${API_BASE}/admin/users/${editingUser.id}`
@@ -199,6 +207,7 @@ export function UserManagement() {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': csrfToken,
         },
         body: JSON.stringify(body),
       });

@@ -41,6 +41,7 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
   // =========================
   // CHECK AUTH ON MOUNT
@@ -124,8 +125,11 @@ export function App() {
     setCurrentPage('dashboard');
   };
 
-  const handleNavigate = (page: string) => {
+  const handleNavigate = (page: string, courseId?: string) => {
     setCurrentPage(page);
+    if (courseId) {
+      setSelectedCourseId(courseId);
+    }
   };
 
   // =========================
@@ -201,11 +205,16 @@ export function App() {
         onLogout={handleLogout}
         user={user}
       >
-        {currentPage === 'dashboard' && <EmployeeDashboard />}
+        {currentPage === 'dashboard' && <EmployeeDashboard onNavigate={handleNavigate} />}
         {currentPage === 'my-courses' && (
           <MyCourses onNavigate={handleNavigate} />
         )}
-        {currentPage === 'course-viewer' && <CourseViewer />}
+        {currentPage === 'course-viewer' && (
+          <CourseViewer 
+            courseId={selectedCourseId || undefined} 
+            onBack={() => handleNavigate('my-courses')} 
+          />
+        )}
         {currentPage === 'progress' && <MyProgress />}
         {currentPage === 'certificates' && <MyCertificates />}
         {currentPage === 'qa' && <QAModule />}

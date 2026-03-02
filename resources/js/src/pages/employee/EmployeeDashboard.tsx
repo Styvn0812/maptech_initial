@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
   Clock,
@@ -7,28 +7,27 @@ import {
   PlayCircle,
   ArrowRight } from
 'lucide-react';
-const myCourses = [
-{
-  id: 1,
-  title: 'Cybersecurity Fundamentals',
-  progress: 75,
-  nextLesson: 'Phishing Attacks',
-  thumbnail: 'bg-blue-500'
-},
-{
-  id: 2,
-  title: 'Leadership Training 101',
-  progress: 30,
-  nextLesson: 'Effective Communication',
-  thumbnail: 'bg-purple-500'
-},
-{
-  id: 3,
-  title: 'Data Privacy Compliance',
-  progress: 0,
-  nextLesson: 'Introduction to GDPR',
-  thumbnail: 'bg-green-500'
-}];
+
+const API_BASE = 'http://127.0.0.1:8000/api';
+
+interface Course {
+  id: string;
+  title: string;
+  progress: number;
+  nextLesson: string;
+  thumbnail: string;
+}
+
+interface DashboardData {
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    department: string;
+  };
+  courses: Course[];
+  total_courses: number;
+}
 
 const upcomingDeadlines = [
 {
@@ -44,17 +43,88 @@ const upcomingDeadlines = [
   type: 'Assignment'
 }];
 
-export function EmployeeDashboard() {
+interface EmployeeDashboardProps {
+  onNavigate?: (page: string, courseId?: string) => void;
+}
+
+export function EmployeeDashboard({ onNavigate }: EmployeeDashboardProps) {
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/employee/dashboard`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to load dashboard');
+        }
+        
+        const data = await response.json();
+        
+        // Map courses to include thumbnail colors
+        const mappedCourses = data.courses.map((course: any) => ({
+          id: course.id,
+          title: course.title,
+          progress: course.progress || 0,
+          nextLesson: course.modules?.[0]?.title || 'Start Course',
+          thumbnail: getThumbnailColor(course.department),
+        }));
+        
+        setDashboardData({
+          user: data.user,
+          courses: mappedCourses,
+          total_courses: data.total_courses,
+        });
+      } catch (error) {
+        console.error('Error loading dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboard();
+  }, []);
+
+  const getThumbnailColor = (department: string) => {
+    const colors: Record<string, string> = {
+      'IT': 'bg-blue-500',
+      'HR': 'bg-purple-500',
+      'Operations': 'bg-green-500',
+      'Finance': 'bg-yellow-500',
+      'Marketing': 'bg-orange-500',
+    };
+    return colors[department] || 'bg-slate-500';
+  };
+
+  const myCourses = dashboardData?.courses || [];
+  const userName = dashboardData?.user?.name || 'Employee';
+  const totalCourses = dashboardData?.total_courses || 0;
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <span className="ml-3 text-slate-600">Loading dashboard...</span>
+      </div>
+    );
+  }
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div className="bg-white rounded-lg shadow-sm border border-slate-100 p-6 flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            Welcome back, Juan! 👋
+            Welcome back, {userName}! 👋
           </h1>
           <p className="text-slate-500 mt-1">
-            You have 2 courses in progress and 1 upcoming deadline.
+            You have {totalCourses} course{totalCourses !== 1 ? 's' : ''} available in your department.
           </p>
         </div>
         <div className="hidden sm:block">
@@ -76,7 +146,7 @@ export function EmployeeDashboard() {
               <p className="text-sm font-medium text-slate-500">
                 Assigned Courses
               </p>
-              <p className="text-2xl font-bold text-slate-900">5</p>
+              <p className="text-2xl font-bold text-slate-900">{totalCourses}</p>
             </div>
           </div>
         </div>
@@ -88,7 +158,7 @@ export function EmployeeDashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-slate-500">Completed</p>
-              <p className="text-2xl font-bold text-slate-900">3</p>
+              <p className="text-2xl font-bold text-slate-900">{myCourses.filter(c => c.progress === 100).length}</p>
             </div>
           </div>
         </div>
@@ -100,7 +170,7 @@ export function EmployeeDashboard() {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-slate-500">In Progress</p>
-              <p className="text-2xl font-bold text-slate-900">2</p>
+              <p className="text-2xl font-bold text-slate-900">{myCourses.filter(c => c.progress > 0 && c.progress < 100).length}</p>
             </div>
           </div>
         </div>
@@ -131,7 +201,16 @@ export function EmployeeDashboard() {
           </div>
 
           <div className="space-y-4">
-            {myCourses.map((course) =>
+            {myCourses.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8 text-center">
+                <BookOpen className="mx-auto h-12 w-12 text-slate-400" />
+                <h3 className="mt-2 text-sm font-medium text-slate-900">No courses available</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  There are no courses assigned to your department yet.
+                </p>
+              </div>
+            ) : (
+            myCourses.map((course) =>
             <div
               key={course.id}
               className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 flex flex-col sm:flex-row gap-4 hover:shadow-md transition-shadow">
@@ -168,11 +247,14 @@ export function EmployeeDashboard() {
                   </div>
                 </div>
                 <div className="flex items-center justify-end sm:justify-center">
-                  <button className="px-4 py-2 bg-slate-50 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-100 border border-slate-200">
+                  <button 
+                    onClick={() => onNavigate?.('course-viewer', course.id)}
+                    className="px-4 py-2 bg-slate-50 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-100 border border-slate-200">
                     Continue
                   </button>
                 </div>
               </div>
+            )
             )}
           </div>
         </div>

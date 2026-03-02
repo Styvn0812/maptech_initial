@@ -1,17 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search,
   Plus,
   Edit2,
   Trash2,
   Filter,
-  MoreVertical,
   BookOpen,
   Users,
   FileText,
-  X } from
+  X,
+  Upload,
+  Trash } from
 'lucide-react';
-interface Course {
+
+// Module interface for form handling
+interface ModuleInput {
+  id: number;
+  title: string;
+  file: File | null;
+}
+
+// Ensure the Course interface is exported
+export interface Course {
   id: number;
   title: string;
   description: string;
@@ -21,7 +32,13 @@ interface Course {
   enrolledCount: number;
   modulesCount: number;
   thumbnail: string;
+  modules: Array<{
+    id?: number;
+    title: string;
+    content_path?: string;
+  }>;
 }
+
 const initialCourses: Course[] = [
 {
   id: 1,
@@ -33,7 +50,8 @@ const initialCourses: Course[] = [
   status: 'Active',
   enrolledCount: 145,
   modulesCount: 8,
-  thumbnail: 'bg-blue-500'
+  thumbnail: 'bg-blue-500',
+  modules: [],
 },
 {
   id: 2,
@@ -44,7 +62,8 @@ const initialCourses: Course[] = [
   status: 'Active',
   enrolledCount: 32,
   modulesCount: 12,
-  thumbnail: 'bg-purple-500'
+  thumbnail: 'bg-purple-500',
+  modules: [],
 },
 {
   id: 3,
@@ -55,7 +74,8 @@ const initialCourses: Course[] = [
   status: 'Draft',
   enrolledCount: 0,
   modulesCount: 5,
-  thumbnail: 'bg-green-500'
+  thumbnail: 'bg-green-500',
+  modules: [],
 },
 {
   id: 4,
@@ -67,7 +87,8 @@ const initialCourses: Course[] = [
   status: 'Active',
   enrolledCount: 89,
   modulesCount: 6,
-  thumbnail: 'bg-orange-500'
+  thumbnail: 'bg-orange-500',
+  modules: [],
 },
 {
   id: 5,
@@ -78,8 +99,11 @@ const initialCourses: Course[] = [
   status: 'Archived',
   enrolledCount: 210,
   modulesCount: 4,
-  thumbnail: 'bg-red-500'
+  thumbnail: 'bg-red-500',
+  modules: [],
 }];
+
+const API_BASE = 'http://127.0.0.1:8000/api';
 
 export function CourseManagement() {
   const [courses, setCourses] = useState<Course[]>(initialCourses);
@@ -87,6 +111,82 @@ export function CourseManagement() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [modules, setModules] = useState<ModuleInput[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Debug: Monitor modules state changes
+  useEffect(() => {
+    console.log('Modules state updated:', modules.map(m => ({ id: m.id, title: m.title, hasFile: !!m.file, fileName: m.file?.name })));
+  }, [modules]);
+
+  // Module management functions
+  const addModule = () => {
+    console.log('addModule clicked, current modules:', modules.length);
+    const newModule = { id: Date.now(), title: '', file: null };
+    setModules(prev => [...prev, newModule]);
+    console.log('New module added:', newModule);
+  };
+
+  const removeModule = (id: number) => {
+    setModules(prev => prev.filter(m => m.id !== id));
+  };
+
+  const updateModuleTitle = (id: number, title: string) => {
+    setModules(prev => prev.map(m => m.id === id ? { ...m, title } : m));
+  };
+
+  const updateModuleFile = (id: number, file: File | null) => {
+    console.log('updateModuleFile called:', id, file?.name, file?.size);
+    setModules(prev => {
+      const updated = prev.map(m => {
+        if (m.id === id) {
+          console.log(`Module ${id} file updated to:`, file?.name);
+          return { ...m, file };
+        }
+        return m;
+      });
+      console.log('Updated modules:', updated.map(m => ({ id: m.id, hasFile: !!m.file })));
+      return updated;
+    });
+  };
+
+  // Load courses from API on mount
+  const loadCourses = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/courses`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to load courses');
+      }
+      const data = await response.json();
+      // Map API response to Course interface
+      const mappedCourses = data.map((course: any) => ({
+        id: course.id,
+        title: course.title,
+        description: course.description || '',
+        department: course.department,
+        instructor: course.instructor?.fullName || 'Unassigned',
+        status: course.status,
+        enrolledCount: course.enrolled_count || 0,
+        modulesCount: course.modules?.length || 0,
+        thumbnail: 'bg-green-500',
+        modules: course.modules || [],
+      }));
+      setCourses(mappedCourses);
+    } catch (error) {
+      console.error('Error loading courses:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadCourses();
+  }, []);
+
   // Filter Logic
   const filteredCourses = courses.filter((course) => {
     const matchesSearch = course.title.
@@ -106,20 +206,120 @@ export function CourseManagement() {
   const handleOpenModal = (course?: Course) => {
     if (course) {
       setEditingCourse(course);
+      // Load existing modules for editing (without files since they're already uploaded)
+      setModules(course.modules?.map((m, index) => ({
+        id: index + 1,
+        title: m.title,
+        file: null,
+      })) || []);
     } else {
       setEditingCourse(null);
+      setModules([]);
     }
     setIsModalOpen(true);
   };
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingCourse(null);
+    setModules([]);
   };
-  // Form Submit Handler (Mock)
-  const handleSubmit = (e: React.FormEvent) => {
+  // Form Submit Handler
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleCloseModal();
-    alert('Course saved successfully!');
+    setIsSubmitting(true);
+
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+
+    // Debug: Log and alert modules being submitted
+    console.log('Submitting modules (state):', modules);
+    const moduleInfo = modules.map(m => `${m.title} (file: ${m.file?.name || 'NONE'})`).join('\n');
+    alert(`Submitting with ${modules.length} modules:\n${moduleInfo}`);
+
+    // Add modules with file uploads to the form data
+    modules.forEach((module, index) => {
+      console.log(`Adding module ${index}:`, module.title, module.file?.name);
+      formData.append(`modules[${index}][title]`, module.title);
+      if (module.file) {
+        formData.append(`modules[${index}][content]`, module.file);
+      }
+    });
+
+    // Debug: Log all form data entries (be aware File objects won't fully stringify)
+    console.log('FormData entries:');
+    for (const pair of formData.entries()) {
+      const [key, value] = pair as [string, any];
+      if (value instanceof File) {
+        console.log(`  ${key}: File -> name=${value.name}, size=${value.size}, type=${value.type}`);
+      } else {
+        console.log(`  ${key}:`, value);
+      }
+    }
+
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (!csrfToken) {
+        alert('CSRF token not found. Please refresh the page and try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const url = editingCourse
+        ? `${API_BASE}/admin/courses/${editingCourse.id}`
+        : `${API_BASE}/admin/courses`;
+
+      // For updates with file uploads, Laravel requires POST with _method=PUT
+      if (editingCourse) {
+        formData.append('_method', 'PUT');
+      }
+
+      console.log('Sending request to:', url);
+      console.log('CSRF Token:', csrfToken?.substring(0, 20) + '...');
+
+      const response = await fetch(url, {
+        method: 'POST', // Always use POST for FormData with files
+        credentials: 'include',
+        headers: {
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response URL:', response.url);
+      
+      const responseText = await response.text();
+      console.log('Response body:', responseText.substring(0, 500));
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          throw new Error(`Server error: ${response.status} - ${responseText.substring(0, 200)}`);
+        }
+        // Show validation errors in detail
+        if (errorData.errors) {
+          const errorMessages = Object.entries(errorData.errors)
+            .map(([field, messages]: [string, any]) => `${field}: ${messages.join(', ')}`)
+            .join('\n');
+          throw new Error(`Validation failed:\n${errorMessages}`);
+        }
+        throw new Error(errorData.message || 'Failed to save course');
+      }
+
+      const data = JSON.parse(responseText);
+      alert(data.message);
+      handleCloseModal();
+      // Reload courses
+      loadCourses();
+    } catch (err: any) {
+      console.error('Course save error:', err);
+      alert(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   return (
     <div className="space-y-6">
@@ -237,119 +437,178 @@ export function CourseManagement() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
-      {isModalOpen &&
-      <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div
-            className="fixed inset-0 transition-opacity"
-            aria-hidden="true">
-
-              <div className="absolute inset-0 bg-slate-500 opacity-75"></div>
+      {/* Add/Edit Modal - Using Portal to render at body level */}
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50" onClick={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-slate-900">
+                {editingCourse ? 'Edit Course' : 'Create New Course'}
+              </h3>
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="h-6 w-6" />
+              </button>
             </div>
-            <span
-            className="hidden sm:inline-block sm:align-middle sm:h-screen"
-            aria-hidden="true">
+            
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Course Title</label>
+                <input
+                  type="text"
+                  name="title"
+                  defaultValue={editingCourse?.title}
+                  required
+                  className="w-full border border-slate-300 rounded-md py-2 px-3 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea
+                  rows={3}
+                  name="description"
+                  defaultValue={editingCourse?.description}
+                  className="w-full border border-slate-300 rounded-md py-2 px-3 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
+                  <select
+                    name="department"
+                    defaultValue={editingCourse?.department || 'IT'}
+                    required
+                    className="w-full border border-slate-300 rounded-md py-2 px-3 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="IT">IT</option>
+                    <option value="HR">HR</option>
+                    <option value="Operations">Operations</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Marketing">Marketing</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    name="status"
+                    defaultValue={editingCourse?.status || 'Active'}
+                    className="w-full border border-slate-300 rounded-md py-2 px-3 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Archived">Archived</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Assign Instructor</label>
+                <select
+                  name="instructor_id"
+                  defaultValue={editingCourse?.instructor}
+                  className="w-full border border-slate-300 rounded-md py-2 px-3 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="">Select Instructor</option>
+                  <option value="1">Prof. Ana Reyes</option>
+                  <option value="2">Andres Bonifacio</option>
+                </select>
+              </div>
 
-              &#8203;
-            </span>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg leading-6 font-medium text-slate-900">
-                    {editingCourse ? 'Edit Course' : 'Create New Course'}
-                  </h3>
+              {/* Module Upload Section */}
+              <div className="border-t border-slate-200 pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="block text-sm font-medium text-slate-700">
+                    Course Modules <span className="text-green-600">({modules.length} added)</span>
+                  </label>
                   <button
-                  onClick={handleCloseModal}
-                  className="text-slate-400 hover:text-slate-500">
-
-                    <X className="h-6 w-6" />
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('Add Module button clicked!');
+                      addModule();
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 border border-green-300 rounded-md text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 cursor-pointer z-10"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Module
                   </button>
                 </div>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">
-                      Course Title
-                    </label>
-                    <input
-                    type="text"
-                    defaultValue={editingCourse?.title}
-                    className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
-
+                
+                {modules.length === 0 ? (
+                  <p className="text-sm text-slate-500 italic">No modules added yet. Click "Add Module" to add course content.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {modules.map((module, index) => (
+                      <div key={module.id} className="p-3 bg-slate-50 rounded-md border border-slate-200">
+                        <div className="flex gap-2 items-start">
+                          <div className="flex-1 space-y-2">
+                            <input
+                              type="text"
+                              placeholder={`Module ${index + 1} Title`}
+                              value={module.title}
+                              onChange={(e) => updateModuleTitle(module.id, e.target.value)}
+                              className="w-full border border-slate-300 rounded-md py-1.5 px-2 text-sm focus:ring-green-500 focus:border-green-500"
+                            />
+                            <input
+                              type="file"
+                              accept="video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.txt"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null;
+                                console.log('File selected:', file?.name, file?.type, file?.size);
+                                alert(`File selected: ${file?.name || 'NONE'} (${file?.size || 0} bytes)`);
+                                updateModuleFile(module.id, file);
+                              }}
+                              className="w-full text-sm text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-medium file:bg-green-50 file:text-green-700"
+                            />
+                            {module.file && (
+                              <p className="text-xs text-green-600 flex items-center">
+                                <Upload className="h-3 w-3 mr-1" />
+                                {module.file.name} ({(module.file.size / 1024 / 1024).toFixed(2)} MB)
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeModule(module.id)}
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">
-                      Description
-                    </label>
-                    <textarea
-                    rows={3}
-                    defaultValue={editingCourse?.description}
-                    className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
-
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">
-                        Department
-                      </label>
-                      <select
-                      defaultValue={editingCourse?.department}
-                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
-
-                        <option>IT</option>
-                        <option>HR</option>
-                        <option>Operations</option>
-                        <option>Finance</option>
-                        <option>Marketing</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">
-                        Status
-                      </label>
-                      <select
-                      defaultValue={editingCourse?.status}
-                      className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
-
-                        <option>Active</option>
-                        <option>Draft</option>
-                        <option>Archived</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">
-                      Assign Instructor
-                    </label>
-                    <select
-                    defaultValue={editingCourse?.instructor}
-                    className="mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm">
-
-                      <option>Prof. Ana Reyes</option>
-                      <option>Andres Bonifacio</option>
-                    </select>
-                  </div>
-                  <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
-                    <button
-                    type="submit"
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:col-start-2 sm:text-sm">
-
-                      Save Course
-                    </button>
-                    <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:mt-0 sm:col-start-1 sm:text-sm">
-
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+                )}
               </div>
-            </div>
+
+              <div className="flex gap-3 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 px-4 border border-slate-300 rounded-md text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 px-4 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Course'}
+                </button>
+              </div>
+            </form>
           </div>
-        </div>
-      }
+        </div>,
+        document.body
+      )}
     </div>);
 
 }

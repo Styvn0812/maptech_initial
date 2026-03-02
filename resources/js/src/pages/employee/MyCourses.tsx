@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -7,8 +7,11 @@ import {
   Clock,
   BookOpen } from
 'lucide-react';
+
+const API_BASE = 'http://127.0.0.1:8000/api';
+
 interface Course {
-  id: number;
+  id: string;
   title: string;
   description: string;
   department: string;
@@ -17,55 +20,70 @@ interface Course {
   status: 'In Progress' | 'Completed' | 'Not Started';
   thumbnail: string;
 }
-const courses: Course[] = [
-{
-  id: 1,
-  title: 'Cybersecurity Fundamentals',
-  description:
-  'Learn the basics of digital security, phishing prevention, and password hygiene.',
-  department: 'IT',
-  progress: 75,
-  modulesCount: 8,
-  status: 'In Progress',
-  thumbnail: 'bg-blue-500'
-},
-{
-  id: 2,
-  title: 'Leadership Training 101',
-  description: 'Essential skills for new managers and team leaders.',
-  department: 'HR',
-  progress: 30,
-  modulesCount: 12,
-  status: 'In Progress',
-  thumbnail: 'bg-purple-500'
-},
-{
-  id: 3,
-  title: 'Data Privacy Compliance',
-  description: 'Understanding GDPR and local data privacy laws.',
-  department: 'Operations',
-  progress: 0,
-  modulesCount: 5,
-  status: 'Not Started',
-  thumbnail: 'bg-green-500'
-},
-{
-  id: 4,
-  title: 'Workplace Safety',
-  description: 'OSHA guidelines and emergency procedures.',
-  department: 'Operations',
-  progress: 100,
-  modulesCount: 4,
-  status: 'Completed',
-  thumbnail: 'bg-red-500'
-}];
 
 interface MyCoursesProps {
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, courseId?: string) => void;
 }
+
 export function MyCourses({ onNavigate }: MyCoursesProps) {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('All');
+
+  // Fetch courses from API on mount
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/employee/courses`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to load courses');
+        }
+        
+        const data = await response.json();
+        
+        // Map API response to Course interface
+        const mappedCourses = data.map((course: any) => ({
+          id: course.id,
+          title: course.title,
+          description: course.description || '',
+          department: course.department,
+          progress: course.progress || 0, // Will be 0 for now since progress tracking isn't implemented
+          modulesCount: course.modules?.length || 0,
+          status: course.progress === 100 ? 'Completed' : course.progress > 0 ? 'In Progress' : 'Not Started',
+          thumbnail: getThumbnailColor(course.department),
+        }));
+        
+        setCourses(mappedCourses);
+      } catch (error) {
+        console.error('Error loading courses:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCourses();
+  }, []);
+
+  // Helper function to get thumbnail color based on department
+  const getThumbnailColor = (department: string) => {
+    const colors: Record<string, string> = {
+      'IT': 'bg-blue-500',
+      'HR': 'bg-purple-500',
+      'Operations': 'bg-green-500',
+      'Finance': 'bg-yellow-500',
+      'Marketing': 'bg-orange-500',
+    };
+    return colors[department] || 'bg-slate-500';
+  };
+
   const filteredCourses = courses.filter((course) => {
     const matchesSearch = course.title.
     toLowerCase().
@@ -107,6 +125,22 @@ export function MyCourses({ onNavigate }: MyCoursesProps) {
         </div>
       </div>
 
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <span className="ml-3 text-slate-600">Loading courses...</span>
+        </div>
+      ) : filteredCourses.length === 0 ? (
+        <div className="text-center py-12">
+          <BookOpen className="mx-auto h-12 w-12 text-slate-400" />
+          <h3 className="mt-2 text-sm font-medium text-slate-900">No courses available</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            {courses.length === 0 
+              ? "There are no courses assigned to your department yet." 
+              : "No courses match your search criteria."}
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCourses.map((course) =>
         <div
@@ -168,7 +202,7 @@ export function MyCourses({ onNavigate }: MyCoursesProps) {
                 </div>
 
                 <button
-                onClick={() => onNavigate('course-viewer')}
+                onClick={() => onNavigate('course-viewer', course.id)}
                 className={`w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-colors ${course.status === 'Completed' ? 'bg-slate-600 hover:bg-slate-700' : 'bg-green-600 hover:bg-green-700'}`}>
 
                   {course.status === 'Not Started' ?
@@ -183,6 +217,7 @@ export function MyCourses({ onNavigate }: MyCoursesProps) {
           </div>
         )}
       </div>
+      )}
     </div>);
 
 }

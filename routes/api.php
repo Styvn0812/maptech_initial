@@ -196,3 +196,22 @@ Route::prefix('employee')->middleware(['auth:sanctum', 'status', 'role:Employee'
     Route::get('/courses/{id}', [DashboardController::class, 'showCourse']);
 });
 
+/*
+|--------------------------------------------------------------------------
+| MODULE CONTENT ROUTES - Authenticated Users Only
+|--------------------------------------------------------------------------
+*/
+
+// Serve module content for authenticated users
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/modules/{module}/content', function (\App\Models\Module $module) {
+        $path = storage_path('app/public/' . $module->content_path);
+        
+        if (!file_exists($path)) {
+            return response()->json(['message' => 'File not found'], 404);
+        }
+        
+        return response()->file($path);
+    });
+});
+

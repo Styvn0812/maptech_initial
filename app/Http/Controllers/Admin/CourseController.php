@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Course;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
+use Exception;
 
 class CourseController extends Controller
 {
@@ -14,7 +17,7 @@ class CourseController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Course::with('instructor:id,name,fullName,email');
+        $query = Course::with('instructor:id,fullName,email');
 
         // Filter by department
         if ($request->has('department')) {
@@ -41,26 +44,83 @@ class CourseController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'department' => 'required|string|max:255',
-            'instructor_id' => 'nullable|exists:users,id',
-            'status' => ['nullable', Rule::in(['Active', 'Inactive', 'Draft'])],
+        \Log::info('Request received for course creation', [
+            'title' => $request->input('title'),
+            'department' => $request->input('department'),
+            'modules_count' => $request->has('modules') ? count($request->input('modules', [])) : 0,
+            'modules_raw' => $request->input('modules'),
+            'all_keys' => array_keys($request->all()),
+            'has_files' => $request->hasFile('modules'),
         ]);
 
-        $course = Course::create([
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'department' => $validated['department'],
-            'instructor_id' => $validated['instructor_id'] ?? null,
-            'status' => $validated['status'] ?? 'Active',
-        ]);
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'department' => 'required|string|max:255',
+                'instructor_id' => 'nullable|exists:users,id',
+                'status' => ['nullable', Rule::in(['Active', 'Inactive', 'Draft'])],
+                'modules' => 'nullable|array',
+                'modules.*.title' => 'nullable|string|max:255',
+                'modules.*.content' => 'nullable|file|max:102400',
+            ]);
 
-        return response()->json([
-            'message' => 'Course created successfully',
-            'course' => $course->load('instructor:id,name,fullName,email')
-        ], 201);
+            \Log::info('Validation successful', [
+                'validated_keys' => array_keys($validated),
+                'has_modules' => isset($validated['modules']),
+                'modules_count' => isset($validated['modules']) ? count($validated['modules']) : 0,
+            ]);
+
+            $course = Course::create([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'department' => $validated['department'],
+                'instructor_id' => $validated['instructor_id'] ?? null,
+                'status' => $validated['status'] ?? 'Active',
+            ]);
+
+            \Log::info('Course created', $course->toArray());
+
+            if (!empty($validated['modules'])) {
+                \Log::info('Processing modules', ['count' => count($validated['modules'])]);
+                foreach ($validated['modules'] as $index => $module) {
+                    \Log::info("Processing module {$index}", [
+                        'title' => $module['title'] ?? 'NO TITLE',
+                        'has_content' => isset($module['content']),
+                    ]);
+                    
+                    if (isset($module['content']) && $module['content'] instanceof \Illuminate\Http\UploadedFile) {
+                        $filePath = $module['content']->store('course-content', 'public');
+                        \Log::info("File stored at: {$filePath}");
+                        $course->modules()->create([
+                            'title' => $module['title'] ?? 'Untitled Module',
+                            'content_path' => $filePath,
+                        ]);
+                    } else {
+                        \Log::warning("Module {$index} has no valid content file");
+                    }
+                }
+            } else {
+                \Log::info('No modules to process');
+            }
+
+            return response()->json([
+                'message' => 'Course created successfully',
+                'course' => $course->load('instructor:id,fullName,email', 'modules')
+            ], 201);
+        } catch (ValidationException $e) {
+            \Log::error('Validation failed', $e->errors());
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (Exception $e) {
+            \Log::error('An error occurred', ['error' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'An error occurred while creating the course',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -68,7 +128,7 @@ class CourseController extends Controller
      */
     public function show(string $id)
     {
-        $course = Course::with('instructor:id,name,fullName,email')->findOrFail($id);
+        $course = Course::with('instructor:id,fullName,email')->findOrFail($id);
 
         return response()->json($course);
     }
@@ -92,7 +152,7 @@ class CourseController extends Controller
 
         return response()->json([
             'message' => 'Course updated successfully',
-            'course' => $course->load('instructor:id,name,fullName,email')
+            'course' => $course->load('instructor:id,fullName,email')
         ]);
     }
 

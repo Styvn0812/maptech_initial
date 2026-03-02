@@ -70,4 +70,46 @@ class CourseController extends Controller
             'course' => $course
         ]);
     }
+
+    /**
+     * Create a new course.
+     */
+    public function store(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'department' => 'required|string|max:255',
+            'status' => ['required', Rule::in(['Active', 'Inactive', 'Draft'])],
+            'modules' => 'nullable|array',
+            'modules.*.title' => 'required_with:modules|string|max:255',
+            'modules.*.content' => 'required_with:modules|file',
+        ]);
+
+        $course = Course::create([
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'department' => $validated['department'],
+            'instructor_id' => $user->id,
+            'status' => $validated['status'],
+        ]);
+
+        // Handle modules and content upload
+        if (!empty($validated['modules'])) {
+            foreach ($validated['modules'] as $module) {
+                $filePath = $module['content']->store('course-content');
+                $course->modules()->create([
+                    'title' => $module['title'],
+                    'content_path' => $filePath,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Course created successfully',
+            'course' => $course->load('modules')
+        ]);
+    }
 }

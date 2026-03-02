@@ -55,4 +55,12 @@ class Course extends Model
     {
         return $query->where('status', 'Active');
     }
+
+    /**
+     * Get the modules associated with the course.
+     */
+    public function modules()
+    {
+        return $this->hasMany(Module::class);
+    }
 }
