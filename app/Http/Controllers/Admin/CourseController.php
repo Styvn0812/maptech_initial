@@ -17,7 +17,8 @@ class CourseController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Course::with('instructor:id,fullName,email');
+        // Eager-load instructor and modules so API returns module data/count
+        $query = Course::with(['instructor:id,fullName,email', 'modules']);
 
         // Filter by department
         if ($request->has('department')) {
@@ -128,7 +129,7 @@ class CourseController extends Controller
      */
     public function show(string $id)
     {
-        $course = Course::with('instructor:id,fullName,email')->findOrFail($id);
+        $course = Course::with(['instructor:id,fullName,email', 'modules'])->findOrFail($id);
 
         return response()->json($course);
     }
